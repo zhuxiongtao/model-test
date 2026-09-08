@@ -1,0 +1,18 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.26
+pydantic>=2.5
+jsonschema>=4.19
+openpyxl>=3.1
+python-multipart>=0.0.6
+aiofiles>=23.0
+# PDF 报告导出（report/generator.py::export_pdf 必需）。
+# 初版漏了这一项，裸装环境下 export_all 会在 PDF 这一步整体抛异常。
+reportlab>=4.0
+# 多模态样本自检（校验内置图片确实可解码）
+Pillow>=10.0
+
+# ---- KVV 精度测试所需（初版只写在 Dockerfile 里，本机跑会 ModuleNotFoundError）----
+# 实跑曾直接以 ModuleNotFoundError: No module named 'httpx2' 失败
+httpx2
+openai>=3.0

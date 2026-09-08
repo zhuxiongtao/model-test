@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GLM-5.3 模型验收测试工具</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-badge">K3</div>
+      <div>
+        <h1 class="brand-title">GLM-5.3 模型验收测试工具</h1>
+        <div class="brand-sub">对照 GLM-5.3 官方能力指标 · 功能20项 + 性能压测（可选）</div>
+      </div>
+    </div>
+    <div>
+      <button id="btn-reload" class="btn btn-outline" title="重新加载配置">↻ 刷新配置</button>
+    </div>
+  </header>
+
+  <!-- 运行 Banner -->
+  <div class="run-banner">
+    <div class="left">
+      <div class="title">一键运行完整验收测试</div>
+      <div class="sub" id="banner-sub">保存配置后点击「开始测试」，工具将逐项执行并自动生成报告。</div>
+    </div>
+    <div class="btn-row">
+      <button id="btn-run" class="btn btn-primary" disabled>
+        <span id="btn-run-text">▶ 开始测试</span>
+        <span id="btn-run-spinner" class="spinner" style="display:none"></span>
+      </button>
+      <button id="btn-cancel" class="btn btn-outline" style="display:none">⏹ 取消本轮</button>
+      <button id="btn-save-config" class="btn btn-outline">💾 保存配置</button>
+    </div>
+  </div>
+
+  <!-- 样本自检告警：内置多模态样本若损坏，F5/F7 会因工具侧问题误判 -->
+  <div id="sample-warning" class="card" style="display:none;border-color:#fcd34d;background:#fffbeb">
+    <b style="color:#92400e">⚠️ 多模态样本自检未通过</b>
+    <div id="sample-warning-body" class="sub" style="margin-top:6px"></div>
+    <div class="sub" style="margin-top:6px">
+      请执行 <code>python3 scripts/make_media_samples.py</code> 重新生成样本，
+      否则 F5 / F7 会因工具自身问题被误判为失败。
+    </div>
+  </div>
+
+  <!-- 配置卡片 -->
+  <section class="card">
+    <div class="collapse open" id="collapse-config">
+      <div class="collapse-trigger">
+        <h2 class="section-title">① 接入配置 <small>供应商端点 &amp; 能力声明</small></h2>
+        <span class="chev">▼</span>
+      </div>
+      <div class="collapse-body">
+        <div class="form-grid">
+          <div class="field full">
+            <label class="required">API Base <span class="hint">(形如 https://your-endpoint.com/v1 )</span></label>
+            <input type="text" id="cfg-api-base" placeholder="https://.../v1" />
+          </div>
+          <div class="field">
+            <label class="required">API Key</label>
+            <input type="password" id="cfg-api-key" placeholder="sk-..." autocomplete="off" />
+            <div class="hint" id="api-key-hint">保存后将遮蔽显示。⚠ 修改凭证前请确认。</div>
+          </div>
+          <div class="field">
+            <label class="required">Model ID</label>
+            <input type="text" id="cfg-model-id" placeholder="your-model-id" />
+          </div>
+          <div class="field">
+            <label>整体请求超时 (秒)</label>
+            <input type="number" id="cfg-timeout" min="30" step="10" value="300" />
+            <div class="hint">多模态/长推理请求耗时较高，建议≥180秒</div>
+          </div>
+
+          <!-- 开关：执行范围 -->
+          <div class="field full">
+            <label>执行范围</label>
+            <div class="switches">
+              <div class="switch-row">
+                <div>
+                  <div class="label-title">功能测试 (26项，必过项强制)</div>
+                  <div class="label-desc">连通性/协议/多模态/工具调用/思考/结构化/推理强度</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="run-functional" checked /><span class="slider"></span></label>
+              </div>
+              <div class="switch-row">
+                <div>
+                  <div class="label-title">性能压测</div>
+                  <div class="label-desc">吞吐 / TTFT / Latency / TPOT / ITL / 缓存命中率</div>
+                </div>
+                <label class="toggle"><input type="checkbox" id="run-benchmark" checked /><span class="slider"></span></label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr style="margin:22px 0;border:none;border-top:1px dashed var(--border)" />
+
+        <h3 class="section-title" style="margin-bottom:12px">能力声明 <small>未声明支持的可选能力 → 对应用例自动豁免（不视为失败）</small></h3>
+        <div class="switches">
+          <div class="switch-row">
+            <div><div class="label-title">思考/推理链输出</div>
+              <div class="label-desc">GLM-5.3 始终思考，输出 reasoning_content</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="cap-thinking" checked /><span class="slider"></span></label>
+          </div>
+          <div class="switch-row">
+            <div><div class="label-title">默认思考=开启</div>
+              <div class="label-desc">不传任何开关时，默认输出 reasoning_content</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="cap-thinking-default" checked /><span class="slider"></span></label>
+          </div>
+          <div class="switch-row">
+            <div><div class="label-title">reasoning_effort 推理强度 <span style="color:var(--danger);font-weight:700">·必过</span></div>
+              <div class="label-desc">low / high / max 三档区分度可观测</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="cap-reasoning-effort" checked /><span class="slider"></span></label>
+          </div>
+          <div class="switch-row">
+            <div><div class="label-title">tool_choice 多分支</div>
+              <div class="label-desc">auto / none / required 三种模式（对应G15用例）</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="cap-tool-choice" checked /><span class="slider"></span></label>
+          </div>
+        </div>
+
+        <hr style="margin:22px 0;border:none;border-top:1px dashed var(--border)" />
+
+        <h3 class="section-title" style="margin-bottom:12px">高级选项</h3>
+        <div class="form-grid">
+          <div class="field full">
+            <label>公网可访问地址 <span class="hint">(public_base_url，选填)</span></label>
+            <input type="text" id="cfg-public-base" placeholder="https://your-tester-host:8787" />
+            <div class="hint">
+              预留字段，当前 GLM-5.3 用例未使用远程 URL 样本。
+            </div>
+          </div>
+          <div class="field">
+            <label>瞬时错误重试次数</label>
+            <input type="number" id="cfg-max-retries" min="0" max="5" value="2" />
+            <div class="hint">429/5xx/超时会退避重试；报告标注「重试后通过」以区分稳定性与能力问题</div>
+          </div>
+        </div>
+
+        <hr style="margin:22px 0;border:none;border-top:1px dashed var(--border)" />
+
+        <!-- Benchmark 参数（可折叠） -->
+        <div class="collapse" id="collapse-bench">
+          <div class="collapse-trigger">
+            <h3 class="section-title" style="margin-bottom:0">性能压测参数 <small>（对齐文档 3.1 默认推荐值）</small></h3>
+            <span class="chev">▼</span>
+          </div>
+          <div class="collapse-body">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+              <button type="button" id="bench-reset" class="btn btn-ghost" title="恢复为文档默认推荐值">↺ 回到默认值</button>
+            </div>
+            <div class="form-grid">
+              <div class="field">
+                <label>会话总数 total-sessions</label>
+                <input type="number" id="bench-sessions" value="30" min="5" />
+              </div>
+              <div class="field">
+                <label>到达率起始 arrival-rate-start</label>
+                <input type="number" step="0.01" id="bench-arrival-start" value="0.08" />
+              </div>
+              <div class="field">
+                <label>到达率终止 arrival-rate-end</label>
+                <input type="number" step="0.01" id="bench-arrival-end" value="1.0" />
+              </div>
+              <div class="field">
+                <label>爬坡时长秒 ramp-duration-seconds</label>
+                <input type="number" id="bench-ramp" value="600" min="60" />
+              </div>
+              <div class="field">
+                <label>稳态时长秒 steady-duration-seconds</label>
+                <input type="number" id="bench-steady" value="300" min="60" />
+              </div>
+              <div class="field">
+                <label>初始Prompt长度均值 init-prompt-length (tokens)</label>
+                <input type="number" id="bench-init-len" value="28569" />
+              </div>
+              <div class="field">
+                <label>用户输入长度均值 input-length (tokens)</label>
+                <input type="number" id="bench-input-len" value="1353" />
+              </div>
+              <div class="field">
+                <label>输出长度均值 output-length (tokens)</label>
+                <input type="number" id="bench-output-len" value="346" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- 执行进度面板 -->
+  <section class="card progress-wrap" id="progress-panel">
+    <div class="collapse open" id="collapse-progress">
+      <div class="collapse-trigger">
+        <h2 class="section-title">② 执行进度 <small id="progress-subtitle">等待开始…</small></h2>
+        <span class="chev">▼</span>
+      </div>
+      <div class="collapse-body">
+        <div class="phase-tabs" id="phase-tabs">
+          <div class="phase-tab" data-phase="functional"><span class="dot"></span>功能测试 20项</div>
+          <div class="phase-tab" data-phase="benchmark"><span class="dot"></span>性能压测</div>
+          <div class="phase-tab" data-phase="report"><span class="dot"></span>生成报告</div>
+        </div>
+
+        <!-- 功能结果表 -->
+        <div id="func-table-wrap" style="overflow:auto;max-height:440px;border:1px solid var(--border);border-radius:8px">
+          <table class="results-table" id="func-table">
+            <thead>
+              <tr>
+                <th style="width:90px">用例ID</th>
+                <th style="width:150px">类别</th>
+                <th>用例名称</th>
+                <th style="width:50px">必过</th>
+                <th style="width:70px">通过率</th>
+                <th style="width:70px">HTTP</th>
+                <th style="width:90px">耗时 ms</th>
+                <th style="width:90px">断言</th>
+                <th style="width:80px">结论</th>
+                <th>失败原因 / 说明</th>
+              </tr>
+            </thead>
+            <tbody id="func-tbody">
+              <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:24px">等待测试开始…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 控制台 -->
+        <h3 class="section-title" style="margin:20px 0 10px">实时日志</h3>
+        <div class="console" id="console"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 报告结果 -->
+  <section class="card progress-wrap" id="report-panel">
+    <div class="collapse open" id="collapse-report">
+      <div class="collapse-trigger">
+        <h2 class="section-title">③ 测试报告</h2>
+        <span class="chev">▼</span>
+      </div>
+      <div class="collapse-body">
+        <div class="report-card" id="report-verdict">
+          <div class="verdict" id="report-verdict-text">测试完成</div>
+          <div class="sub" id="report-sub">—</div>
+        </div>
+        <div class="download-row">
+          <a id="download-html" class="btn btn-primary" target="_blank" style="display:none">📄 查看/下载 HTML 报告</a>
+          <a id="download-json" class="btn btn-outline" style="display:none">📋 下载 JSON (机器可读)</a>
+          <a id="download-xlsx" class="btn btn-success" style="display:none">📊 下载 Excel (便于提交)</a>
+          <a id="download-pdf" class="btn btn-outline" style="display:none">🖨️ 下载 PDF (便于归档)</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 历史报告 -->
+  <section class="card">
+    <div class="collapse" id="collapse-history">
+      <div class="collapse-trigger">
+        <h2 class="section-title">④ 历史报告 <small id="history-sub">(自动从 output/ 目录读取)</small></h2>
+        <span class="chev">▼</span>
+      </div>
+      <div class="collapse-body">
+        <div class="history-list" id="history-list">
+          <div style="color:var(--text-muted);padding:12px">加载中…</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/js/app.js"></script>
+</body>
+</html>
